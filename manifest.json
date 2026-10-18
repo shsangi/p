@@ -1,0 +1,22 @@
+{
+  "name": "Pirah Periods Dashboard",
+  "short_name": "Pirah",
+  "description": "Cycle and duration tracking dashboard",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#faf5f8",
+  "theme_color": "#f8bbd0",
+  "icons": [
+    {
+      "src": "p1.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "p1.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
