@@ -175,6 +175,7 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
+    flex-shrink: 0;
   }
 
   .chart-title { font-size: 11px; font-weight: 600; color: var(--soft-purple); }
@@ -205,12 +206,17 @@
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   }
 
-  .canvas-container {
+  /* SCROLLABLE CHART AREA */
+  .canvas-scroll-wrapper {
     flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
     position: relative;
-    width: 100%;
-    min-height: 120px;
+    -webkit-overflow-scrolling: touch;
   }
+
+  .canvas-scroll-wrapper::-webkit-scrollbar { width: 4px; }
+  .canvas-scroll-wrapper::-webkit-scrollbar-thumb { background: #f8bbd0; border-radius: 4px; }
 
   /* Table Container */
   .table-container { flex: 1; }
@@ -330,15 +336,19 @@
     <!-- CHART -->
     <div class="card chart-wrapper animate-chart">
       <div class="chart-header">
-        <div class="chart-title" id="chartTitleDisplay">Recent Cycle Durations</div>
+        <div class="chart-title" id="chartTitleDisplay">Cycle Durations</div>
         <div class="filter-tabs">
           <button onclick="changeView('daily')" id="btn-daily" class="active">Daily</button>
           <button onclick="changeView('weekly')" id="btn-weekly">Weekly</button>
           <button onclick="changeView('monthly')" id="btn-monthly">Monthly</button>
         </div>
       </div>
-      <div class="canvas-container">
-        <canvas id="barChart"></canvas>
+      
+      <!-- Scrollable Chart Wrapper -->
+      <div class="canvas-scroll-wrapper" id="chartScrollArea">
+        <div id="canvasContainer" style="position: relative; width: 100%; height: 100%;">
+          <canvas id="barChart"></canvas>
+        </div>
       </div>
     </div>
 
@@ -361,69 +371,112 @@
   </div>
 
 <script>
-  // --- 1. LIVE DATE & TIME (WITH SECONDS) ---
+  // --- 1. LIVE DATE & TIME ---
   function updateLiveDateTime() {
     const now = new Date();
-    const options = { 
-      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true 
-    };
-    let formatted = now.toLocaleString('en-US', options);
-    formatted = formatted.replace(/,(\s\d{4})/, '$1'); 
+    const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+    let formatted = now.toLocaleString('en-US', options).replace(/,(\s\d{4})/, '$1'); 
     document.getElementById('liveDateTime').innerText = formatted;
   }
   setInterval(updateLiveDateTime, 1000);
   updateLiveDateTime();
 
-  // --- 2. EXACT CSV DATA ---
-  const csvData = [
-    { date: "Oct 9, 2026", days: 9, weeks: 1, months: 0, duration: "0 Months 9 Days" },
-    { date: "Sep 8, 2026", days: 31, weeks: 4, months: 1, duration: "1 Month 1 Day" },
-    { date: "Aug 6, 2026", days: 33, weeks: 4, months: 1, duration: "1 Month 3 Days" },
-    { date: "Jul 2, 2026", days: 35, weeks: 5, months: 1, duration: "1 Month 5 Days" },
-    { date: "May 25, 2026", days: 38, weeks: 5, months: 1, duration: "1 Month 8 Days" },
-    { date: "Apr 21, 2026", days: 34, weeks: 4, months: 1, duration: "1 Month 4 Days" },
-    { date: "Mar 16, 2026", days: 36, weeks: 5, months: 1, duration: "1 Month 6 Days" },
-    { date: "Feb 11, 2026", days: 33, weeks: 4, months: 1, duration: "1 Month 3 Days" },
-    { date: "Jan 9, 2026", days: 33, weeks: 4, months: 1, duration: "1 Month 3 Days" },
-    { date: "Dec 9, 2025", days: 31, weeks: 4, months: 1, duration: "1 Month 1 Day" }
-  ];
+  // --- 2. DYNAMIC AUTO-FETCH VARIABLES ---
+  let csvData = []; 
+  let currentView = 'daily';
+  let chartInstance = null;
 
-  // Helper to add Weekday to Date String
-  function getWeekdayDate(dateString) {
-    const dateObj = new Date(dateString);
-    return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  // ⚠️ PASTE YOUR GOOGLE SHEET CSV URL BELOW ⚠️
+  // Make sure the Google Sheet is "Published to the web" as a .CSV
+  const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtnlGwD2UMLP8U_xNHb0vs7NP75Ikkk-G4xQNbTvjyHpymzsOw5qUbYU3h_9uxEDnOWmrCrfkOffWz/pub?gid=501812835&single=true&output=csv";
+
+  // Fetch and Parse CSV Function
+  async function fetchAndParseCSV() {
+    try {
+      const response = await fetch(csvUrl);
+      const text = await response.text();
+      
+      // Parse CSV
+      const rows = text.split('\n').map(row => row.split(','));
+      
+      // The CSV headers are usually at row 0, but we'll search for the first row with "Periods Date"
+      let dataStartIndex = 0;
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].some(cell => cell.includes("Periods Date"))) {
+          dataStartIndex = i + 1; // Data starts after header
+          break;
+        }
+      }
+
+      let newData = [];
+      
+      for (let i = dataStartIndex; i < rows.length; i++) {
+        const cols = rows[i];
+        // Skip empty rows
+        if (!cols || cols.length < 8 || !cols[1]) continue;
+
+        const dateStr = cols[1].trim();
+        const durationStr = cols[4].trim();
+        const totalDays = parseInt(cols[6]);
+        const totalMonths = parseInt(cols[7]);
+        const totalWeeks = parseInt(cols[8]);
+
+        if (isNaN(totalDays)) continue; // Skip invalid rows
+
+        newData.push({
+          date: dateStr,
+          days: totalDays,
+          weeks: totalWeeks,
+          months: totalMonths,
+          duration: durationStr
+        });
+      }
+
+      // Reverse so the newest record is at the top
+      // (Assuming Google Sheets appends new rows at the bottom)
+      csvData = newData.reverse();
+
+      // Update the UI with new data
+      updateDashboardUI();
+
+    } catch (error) {
+      console.error("Error fetching CSV:", error);
+    }
   }
 
-  // --- 3. UPDATE UI & TABLE ---
-  function initDashboard() {
+  // --- 3. UI UPDATE FUNCTIONS ---
+  function updateDashboardUI() {
+    if (csvData.length === 0) return;
+
     const latest = csvData[0];
 
+    // Update Top Stats
     document.getElementById('latestDate').innerText = latest.date;
     document.getElementById('statDays').innerText = latest.days;
     document.getElementById('statWeeks').innerText = latest.weeks;
     document.getElementById('statMonths').innerText = latest.months;
 
-    changeView('daily');
+    // Re-render current view
+    changeView(currentView);
+  }
+
+  // Helper to format date beautifully
+  function getWeekdayDate(dateString) {
+    const dateObj = new Date(dateString);
+    if(isNaN(dateObj)) return dateString; // Fallback if parsing fails
+    return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   // --- 4. FILTER LOGIC ---
-  let chartInstance = null;
-
   function changeView(view) {
-    // Update Tab Styles
+    currentView = view;
+
     document.querySelectorAll('.filter-tabs button').forEach(b => b.classList.remove('active'));
     document.getElementById(`btn-${view}`).classList.add('active');
 
-    // Update Chart Title
-    const titles = {
-      'daily': 'Recent Cycle Durations',
-      'weekly': 'Weekly Breakdown',
-      'monthly': 'Monthly Breakdown'
-    };
+    const titles = { 'daily': 'Cycle Durations', 'weekly': 'Weekly Breakdown', 'monthly': 'Monthly Breakdown' };
     document.getElementById('chartTitleDisplay').innerText = titles[view];
 
-    // Update Table Headers dynamically
     const thMetric = document.getElementById('th-metric');
     if (view === 'daily') thMetric.innerText = 'Days';
     if (view === 'weekly') thMetric.innerText = 'Weeks';
@@ -432,30 +485,28 @@
     renderBarChartAndTable(view);
   }
 
-  // --- 5. RENDER CHART & TABLE DYNAMICALLY ---
+  // --- 5. RENDER CHART & TABLE ---
   function renderBarChartAndTable(viewType) {
+    if (csvData.length === 0) return;
+
     const ctx = document.getElementById('barChart').getContext('2d');
     
     if (chartInstance) {
       chartInstance.destroy();
     }
 
-    let displayData = csvData.slice(0, 8); // Top 8 records
-    let labels = [];
+    let labels = csvData.map(d => getWeekdayDate(d.date)); // Use beautiful dates for labels
     let dataPoints = [];
     let unit = ' d';
 
-    // Prepare Chart Data based on selected tab
-    labels = displayData.map(d => d.date);
-    
     if (viewType === 'daily') {
-      dataPoints = displayData.map(d => d.days);
+      dataPoints = csvData.map(d => d.days);
       unit = ' d';
     } else if (viewType === 'weekly') {
-      dataPoints = displayData.map(d => d.weeks);
+      dataPoints = csvData.map(d => d.weeks);
       unit = ' w';
     } else if (viewType === 'monthly') {
-      dataPoints = displayData.map(d => d.months);
+      dataPoints = csvData.map(d => d.months);
       unit = ' mo';
     }
 
@@ -463,25 +514,27 @@
     const tbody = document.getElementById('tableBody');
     tbody.innerHTML = '';
     
-    displayData.forEach((row, index) => {
+    csvData.forEach((row, index) => {
       const tr = document.createElement('tr');
       if (index === 0) tr.classList.add('highlight-row'); 
       
-      const fullDate = getWeekdayDate(row.date);
-      
-      // The middle column changes based on the tab
       let metricValue = row.days;
       if (viewType === 'weekly') metricValue = row.weeks;
       if (viewType === 'monthly') metricValue = row.months;
 
-      // Duration ALWAYS remains "Months and Days" from CSV
       tr.innerHTML = `
-        <td>${fullDate}</td>
+        <td>${getWeekdayDate(row.date)}</td>
         <td>${metricValue}</td>
         <td>${row.duration}</td>
       `;
       tbody.appendChild(tr);
     });
+
+    // --- DYNAMIC CHART HEIGHT ---
+    // Increase height based on how many records we have so they don't overlap
+    const requiredHeight = (csvData.length * 35) + 50; 
+    const canvasContainer = document.getElementById('canvasContainer');
+    canvasContainer.style.height = `${requiredHeight}px`;
 
     // --- UPDATE CHART ---
     chartInstance = new Chart(ctx, {
@@ -493,14 +546,14 @@
           backgroundColor: labels.map((_, i) => i === 0 ? '#d81b60' : '#f8bbd0'), 
           borderRadius: 6, 
           borderSkipped: false,
-          barThickness: 12, 
+          barThickness: 14, 
           hoverBackgroundColor: '#ad1457'
         }]
       },
       options: {
         indexAxis: 'y',
         responsive: true,
-        maintainAspectRatio: false,
+        maintainAspectRatio: false, 
         layout: { padding: { right: 25 } },
         plugins: {
           legend: { display: false },
@@ -548,7 +601,12 @@
     });
   }
 
-  initDashboard();
+  // --- 6. INITIALIZE & AUTO-REFRESH ---
+  // Fetch immediately on load
+  fetchAndParseCSV();
+
+  // Then fetch every 30 seconds to automatically grab new records!
+  setInterval(fetchAndParseCSV, 30000);
 
 </script>
 </body>
