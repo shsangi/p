@@ -392,76 +392,28 @@
   // ⚠️ PASTE YOUR GOOGLE SHEET CSV URL BELOW ⚠️
   const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtnlGwD2UMLP8U_xNHb0vs7NP75Ikkk-G4xQNbTvjyHpymzsOw5qUbYU3h_9uxEDnOWmrCrfkOffWz/pub?gid=501812835&single=true&output=csv";
 
-  // --- CUSTOM DATE PARSER (FIXES M/D/YYYY FORMAT) ---
+  // --- CUSTOM DATE PARSER (STRICTLY FOR M/D/YYYY) ---
   function parseMyDate(dateString) {
     if (!dateString) return null;
     dateString = dateString.trim();
 
-    // Check if it's in M/D/YYYY format (e.g., 2/19/2023)
     const parts = dateString.split('/');
     if (parts.length === 3) {
       const month = parseInt(parts[0], 10);
       const day = parseInt(parts[1], 10);
       let year = parseInt(parts[2], 10);
       
-      if (year < 100) year += 2000; // Handle 2-digit years just in case
+      if (year < 100) year += 2000; 
       
-      // JS Date months are 0-indexed (0 = Jan, 1 = Feb)
       return new Date(year, month - 1, day);
     }
-    
-    // Fallback for words (e.g., "October 9, 2026")
     return new Date(dateString); 
   }
 
-  // Helper to format date beautifully for display
   function getWeekdayDate(dateString) {
     const dateObj = parseMyDate(dateString);
     if(!dateObj || isNaN(dateObj)) return dateString; 
     return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  // --- CALCULATE LIVE DURATION (TODAY vs LATEST RECORD) ---
-  function calculateLiveDuration(startDateString) {
-    const startDate = parseMyDate(startDateString);
-    const today = new Date();
-    
-    startDate.setHours(0,0,0,0);
-    today.setHours(0,0,0,0);
-
-    if (startDate > today) {
-      return { days: 0, weeks: 0, months: 0, duration: "0 Months 0 Days" };
-    }
-
-    const diffTime = Math.abs(today - startDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const diffWeeks = Math.floor(diffDays / 7);
-
-    let months = (today.getFullYear() - startDate.getFullYear()) * 12;
-    months -= startDate.getMonth();
-    months += today.getMonth();
-    
-    let tempDate = new Date(startDate);
-    tempDate.setMonth(tempDate.getMonth() + months);
-    
-    if (tempDate > today) {
-      months--;
-      tempDate = new Date(startDate);
-      tempDate.setMonth(tempDate.getMonth() + months);
-    }
-    
-    const remainingDays = Math.ceil((today - tempDate) / (1000 * 60 * 60 * 24));
-    
-    let durationStr = "";
-    if (months > 0) durationStr += `${months} Month${months > 1 ? 's' : ''} `;
-    durationStr += `${remainingDays} Day${remainingDays !== 1 ? 's' : ''}`;
-
-    return { 
-      days: diffDays, 
-      weeks: diffWeeks, 
-      months: months, 
-      duration: durationStr.trim() 
-    };
   }
 
   // Fetch and Parse CSV Function
@@ -470,11 +422,16 @@
       const response = await fetch(csvUrl);
       const text = await response.text();
       
-      const rows = text.split('\n').map(row => row.split(','));
+      // Splitting by new lines, handling potential \r
+      const rows = text.split(/\r?\n/).map(row => {
+        // Simple CSV split. If your descriptions have commas, we'd need a more complex parser, 
+        // but based on the sample, this works perfectly.
+        return row.split(',');
+      });
       
       let dataStartIndex = 0;
       for (let i = 0; i < rows.length; i++) {
-        if (rows[i].some(cell => cell.includes("Periods Date"))) {
+        if (rows[i].some(cell => cell && cell.includes("Periods Date"))) {
           dataStartIndex = i + 1; 
           break;
         }
@@ -484,11 +441,12 @@
       
       for (let i = dataStartIndex; i < rows.length; i++) {
         const cols = rows[i];
-        if (!cols || cols.length < 8 || !cols[1]) continue;
+        
+        // Skip empty rows (the huge blank space in the sheet)
+        if (!cols || cols.length < 8 || !cols[1] || cols[1].trim() === '') continue;
 
         const dateStr = cols[1].trim();
-        const durationStr = cols[4].trim();
-        const statusStr = cols[3] ? cols[3].trim() : "";
+        const durationStr = cols[4] ? cols[4].trim() : '';
         const totalDays = parseInt(cols[6]);
         const totalMonths = parseInt(cols[7]);
         const totalWeeks = parseInt(cols[8]);
@@ -500,8 +458,7 @@
           days: totalDays,
           weeks: totalWeeks,
           months: totalMonths,
-          duration: durationStr,
-          status: statusStr
+          duration: durationStr
         });
       }
 
@@ -520,20 +477,11 @@
 
     const latest = csvData[0];
     
-    // Auto-calculate the Live Duration from the most recent date to TODAY
-    const liveStats = calculateLiveDuration(latest.date);
-
+    // Pull EXACT values from the sheet for top cards
     document.getElementById('latestDate').innerText = getWeekdayDate(latest.date);
-    
-    document.getElementById('statDays').innerText = liveStats.days;
-    document.getElementById('statWeeks').innerText = liveStats.weeks;
-    document.getElementById('statMonths').innerText = liveStats.months;
-
-    // Update the top record in the data array so the table/chart reflect the live calculation
-    latest.days = liveStats.days;
-    latest.weeks = liveStats.weeks;
-    latest.months = liveStats.months;
-    latest.duration = liveStats.duration;
+    document.getElementById('statDays').innerText = latest.days;
+    document.getElementById('statWeeks').innerText = latest.weeks;
+    document.getElementById('statMonths').innerText = latest.months;
 
     changeView(currentView);
   }
