@@ -240,16 +240,18 @@
   }
   
   th, td { 
-    padding: 8px 4px; 
+    padding: 8px 2px; 
     border-bottom: 1px solid #fce4ec; 
-    font-size: 10px; 
+    font-size: 9px; /* Adjusted for 4 columns */
     word-wrap: break-word; 
     line-height: 1.3;
   }
   
-  th:nth-child(1), td:nth-child(1) { width: 45%; text-align: left; padding-left: 12px;}
-  th:nth-child(2), td:nth-child(2) { width: 15%; } 
-  th:nth-child(3), td:nth-child(3) { width: 40%; text-align: right; padding-right: 12px;} 
+  /* Column Widths for 4 Columns */
+  th:nth-child(1), td:nth-child(1) { width: 10%; text-align: center; } /* Sr# */
+  th:nth-child(2), td:nth-child(2) { width: 35%; text-align: left; padding-left: 5px;} /* Date */
+  th:nth-child(3), td:nth-child(3) { width: 15%; } /* Metric */
+  th:nth-child(4), td:nth-child(4) { width: 40%; text-align: right; padding-right: 8px;} /* Duration */
 
   th { 
     background: #fff0f5; 
@@ -297,8 +299,8 @@
     .filter-tabs button { font-size: 12px; padding: 6px 12px; }
     
     th, td { padding: 12px 10px; font-size: 14px; }
-    th:nth-child(1), td:nth-child(1) { padding-left: 20px; }
-    th:nth-child(3), td:nth-child(3) { padding-right: 20px; }
+    th:nth-child(2), td:nth-child(2) { padding-left: 15px; }
+    th:nth-child(4), td:nth-child(4) { padding-right: 20px; }
   }
 </style>
 </head>
@@ -358,6 +360,7 @@
         <table>
           <thead>
             <tr>
+              <th>Sr#</th>
               <th id="th-date">Date</th>
               <th id="th-metric">Days</th>
               <th id="th-duration">Duration</th>
@@ -387,7 +390,6 @@
   let chartInstance = null;
 
   // ⚠️ PASTE YOUR GOOGLE SHEET CSV URL BELOW ⚠️
-  // Make sure the Google Sheet is "Published to the web" as a .CSV
   const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtnlGwD2UMLP8U_xNHb0vs7NP75Ikkk-G4xQNbTvjyHpymzsOw5qUbYU3h_9uxEDnOWmrCrfkOffWz/pub?gid=501812835&single=true&output=csv";
 
   // Fetch and Parse CSV Function
@@ -396,14 +398,12 @@
       const response = await fetch(csvUrl);
       const text = await response.text();
       
-      // Parse CSV
       const rows = text.split('\n').map(row => row.split(','));
       
-      // The CSV headers are usually at row 0, but we'll search for the first row with "Periods Date"
       let dataStartIndex = 0;
       for (let i = 0; i < rows.length; i++) {
         if (rows[i].some(cell => cell.includes("Periods Date"))) {
-          dataStartIndex = i + 1; // Data starts after header
+          dataStartIndex = i + 1; 
           break;
         }
       }
@@ -412,7 +412,6 @@
       
       for (let i = dataStartIndex; i < rows.length; i++) {
         const cols = rows[i];
-        // Skip empty rows
         if (!cols || cols.length < 8 || !cols[1]) continue;
 
         const dateStr = cols[1].trim();
@@ -421,7 +420,7 @@
         const totalMonths = parseInt(cols[7]);
         const totalWeeks = parseInt(cols[8]);
 
-        if (isNaN(totalDays)) continue; // Skip invalid rows
+        if (isNaN(totalDays)) continue; 
 
         newData.push({
           date: dateStr,
@@ -432,11 +431,8 @@
         });
       }
 
-      // Reverse so the newest record is at the top
-      // (Assuming Google Sheets appends new rows at the bottom)
+      // Reverse so newest is at the top
       csvData = newData.reverse();
-
-      // Update the UI with new data
       updateDashboardUI();
 
     } catch (error) {
@@ -449,21 +445,18 @@
     if (csvData.length === 0) return;
 
     const latest = csvData[0];
-
-    // Update Top Stats
     document.getElementById('latestDate').innerText = latest.date;
     document.getElementById('statDays').innerText = latest.days;
     document.getElementById('statWeeks').innerText = latest.weeks;
     document.getElementById('statMonths').innerText = latest.months;
 
-    // Re-render current view
     changeView(currentView);
   }
 
-  // Helper to format date beautifully
+  // Helper to format date
   function getWeekdayDate(dateString) {
     const dateObj = new Date(dateString);
-    if(isNaN(dateObj)) return dateString; // Fallback if parsing fails
+    if(isNaN(dateObj)) return dateString; 
     return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   }
 
@@ -495,7 +488,7 @@
       chartInstance.destroy();
     }
 
-    let labels = csvData.map(d => getWeekdayDate(d.date)); // Use beautiful dates for labels
+    let labels = csvData.map(d => getWeekdayDate(d.date)); 
     let dataPoints = [];
     let unit = ' d';
 
@@ -522,7 +515,9 @@
       if (viewType === 'weekly') metricValue = row.weeks;
       if (viewType === 'monthly') metricValue = row.months;
 
+      // Added Sr. No. (index + 1)
       tr.innerHTML = `
+        <td>${index + 1}</td>
         <td>${getWeekdayDate(row.date)}</td>
         <td>${metricValue}</td>
         <td>${row.duration}</td>
@@ -531,7 +526,6 @@
     });
 
     // --- DYNAMIC CHART HEIGHT ---
-    // Increase height based on how many records we have so they don't overlap
     const requiredHeight = (csvData.length * 35) + 50; 
     const canvasContainer = document.getElementById('canvasContainer');
     canvasContainer.style.height = `${requiredHeight}px`;
@@ -602,11 +596,8 @@
   }
 
   // --- 6. INITIALIZE & AUTO-REFRESH ---
-  // Fetch immediately on load
   fetchAndParseCSV();
-
-  // Then fetch every 30 seconds to automatically grab new records!
-  setInterval(fetchAndParseCSV, 30000);
+  setInterval(fetchAndParseCSV, 30000); // Auto-updates every 30 seconds
 
 </script>
 </body>
