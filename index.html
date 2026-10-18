@@ -374,7 +374,7 @@
   </div>
 
 <script>
-  // --- 1. LIVE DATE & TIME ---
+  // --- 1. LIVE DATE & TIME (Header Only) ---
   function updateLiveDateTime() {
     const now = new Date();
     const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
@@ -390,91 +390,6 @@
   let chartInstance = null;
 
   const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtnlGwD2UMLP8U_xNHb0vs7NP75Ikkk-G4xQNbTvjyHpymzsOw5qUbYU3h_9uxEDnOWmrCrfkOffWz/pub?gid=501812835&single=true&output=csv";
-
-  // --- CUSTOM DATE PARSER ---
-  function parseMyDate(dateString) {
-    if (!dateString) return null;
-    dateString = dateString.trim();
-
-    if (isNaN(dateString.split('/')[0])) {
-      const d = new Date(dateString);
-      if (!isNaN(d)) return d;
-    } 
-    
-    const parts = dateString.split('/');
-    if (parts.length === 3) {
-      const p1 = parseInt(parts[0], 10);
-      const p2 = parseInt(parts[1], 10);
-      let year = parseInt(parts[2], 10);
-      if (year < 100) year += 2000;
-
-      let month, day;
-      if (p1 > 12) {
-        day = p1;
-        month = p2;
-      } else {
-        month = p1;
-        day = p2;
-      }
-      return new Date(year, month - 1, day);
-    }
-    return new Date(dateString); 
-  }
-
-  function getWeekdayDate(dateString) {
-    const dateObj = parseMyDate(dateString);
-    if(!dateObj || isNaN(dateObj)) return dateString; 
-    return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  // --- CALCULATE LIVE DURATION (TODAY vs LATEST RECORD) ---
-  function calculateLiveDuration(startDateString) {
-    const startDate = parseMyDate(startDateString);
-    const today = new Date();
-    
-    // Remove time from dates to compare exact days
-    startDate.setHours(0,0,0,0);
-    today.setHours(0,0,0,0);
-
-    // If the start date is in the future, just show 0
-    if (startDate > today) {
-      return { days: 0, weeks: 0, months: 0, duration: "0 Months 0 Days" };
-    }
-
-    // 1. Calculate Total Days
-    const diffTime = Math.abs(today - startDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    // 2. Calculate Total Weeks (rounded down)
-    const diffWeeks = Math.floor(diffDays / 7);
-
-    // 3. Calculate Months and Remaining Days
-    let months = (today.getFullYear() - startDate.getFullYear()) * 12;
-    months -= startDate.getMonth();
-    months += today.getMonth();
-    
-    let tempDate = new Date(startDate);
-    tempDate.setMonth(tempDate.getMonth() + months);
-    
-    if (tempDate > today) {
-      months--;
-      tempDate = new Date(startDate);
-      tempDate.setMonth(tempDate.getMonth() + months);
-    }
-    
-    const remainingDays = Math.ceil((today - tempDate) / (1000 * 60 * 60 * 24));
-    
-    let durationStr = "";
-    if (months > 0) durationStr += `${months} Month${months > 1 ? 's' : ''} `;
-    durationStr += `${remainingDays} Day${remainingDays !== 1 ? 's' : ''}`;
-
-    return { 
-      days: diffDays, 
-      weeks: diffWeeks, 
-      months: months, 
-      duration: durationStr.trim() 
-    };
-  }
 
   // Fetch and Parse CSV Function
   async function fetchAndParseCSV() {
@@ -496,28 +411,31 @@
       
       for (let i = dataStartIndex; i < rows.length; i++) {
         const cols = rows[i];
+        // Skip empty rows
         if (!cols || cols.length < 8 || !cols[1]) continue;
 
+        // GRAB EXACT DATA FROM SHEET - NO FORMATTING
+        const srNo = cols[0].trim();
         const dateStr = cols[1].trim();
         const durationStr = cols[4].trim();
-        const statusStr = cols[3] ? cols[3].trim() : "";
         const totalDays = parseInt(cols[6]);
         const totalMonths = parseInt(cols[7]);
         const totalWeeks = parseInt(cols[8]);
 
+        // Skip invalid rows
         if (isNaN(totalDays)) continue; 
 
         newData.push({
+          srNo: srNo,
           date: dateStr,
           days: totalDays,
           weeks: totalWeeks,
           months: totalMonths,
-          duration: durationStr,
-          status: statusStr
+          duration: durationStr
         });
       }
 
-      // Reverse so newest is at the top
+      // Reverse the array so newest row is at the top (descending order as per sheet)
       csvData = newData.reverse();
       updateDashboardUI();
 
@@ -532,22 +450,11 @@
 
     const latest = csvData[0];
     
-    // CHECK IF THE LATEST RECORD IS ONGOING (Status = Continue, or just pick the newest date)
-    // We will force calculate the duration from the latest date to TODAY for the top cards
-    const liveStats = calculateLiveDuration(latest.date);
-
-    document.getElementById('latestDate').innerText = getWeekdayDate(latest.date);
-    
-    // Set top cards to the LIVE calculated duration
-    document.getElementById('statDays').innerText = liveStats.days;
-    document.getElementById('statWeeks').innerText = liveStats.weeks;
-    document.getElementById('statMonths').innerText = liveStats.months;
-
-    // Also update the latest record in the csvData array so it shows correctly in the table/chart
-    latest.days = liveStats.days;
-    latest.weeks = liveStats.weeks;
-    latest.months = liveStats.months;
-    latest.duration = liveStats.duration;
+    // Show EXACT string from sheet
+    document.getElementById('latestDate').innerText = latest.date;
+    document.getElementById('statDays').innerText = latest.days;
+    document.getElementById('statWeeks').innerText = latest.weeks;
+    document.getElementById('statMonths').innerText = latest.months;
 
     changeView(currentView);
   }
@@ -580,7 +487,8 @@
       chartInstance.destroy();
     }
 
-    let labels = csvData.map(d => getWeekdayDate(d.date)); 
+    // Use exact raw strings for labels
+    let labels = csvData.map(d => d.date); 
     let dataPoints = [];
     let unit = ' d';
 
@@ -601,15 +509,17 @@
     
     csvData.forEach((row, index) => {
       const tr = document.createElement('tr');
+      // Highlight the very first row (newest)
       if (index === 0) tr.classList.add('highlight-row'); 
       
       let metricValue = row.days;
       if (viewType === 'weekly') metricValue = row.weeks;
       if (viewType === 'monthly') metricValue = row.months;
 
+      // Display row exactly as sheet, but re-number Sr# based on display position (1, 2, 3...)
       tr.innerHTML = `
         <td>${index + 1}</td>
-        <td>${getWeekdayDate(row.date)}</td>
+        <td>${row.date}</td>
         <td>${metricValue}</td>
         <td>${row.duration}</td>
       `;
