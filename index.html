@@ -72,18 +72,22 @@
     height: 32%;
   }
 
+  /* ✅ SIMPLE, TINY, NO-BACKGROUND TIMESTAMP */
   .date-time-badge {
     position: absolute;
-    top: 10px;
-    right: 12px;
-    background: rgba(255, 255, 255, 0.4); 
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 9px;
-    font-weight: 600;
-    color: #444;
+    top: 8px;
+    right: 10px;
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    font-size: 8px;
+    font-weight: 400;
+    color: #777;
     letter-spacing: 0.2px;
-    backdrop-filter: blur(4px);
+    box-shadow: none;
+    border: none;
+    backdrop-filter: none;
+    line-height: 1;
   }
 
   .main-title {
@@ -272,7 +276,7 @@
     .header-card { height: auto; padding: 30px 40px; border-radius: 28px; }
     .main-title { font-size: 32px; margin-top: 10px; }
     .latest-date-badge { font-size: 16px; margin-bottom: 25px; }
-    .date-time-badge { font-size: 12px; padding: 4px 12px; }
+    .date-time-badge { font-size: 10px; top: 10px; right: 14px; }
     
     .cards-row { gap: 20px; }
     .dist-card { padding: 20px; border-radius: 20px; }
@@ -302,7 +306,7 @@
 <body>
 
   <div class="header-card animate-header">
-    <div class="date-time-badge" id="liveDateTime">Loading...</div>
+    <div class="date-time-badge" id="liveDateTime">--</div>
     
     <div class="main-title">Pirah Periods Dashboard 🌸</div>
     <div class="latest-date-badge">Latest Record: <span id="latestDate">...</span><span class="live-tag" id="liveTag"></span></div>
@@ -367,7 +371,7 @@
 
 <script>
   // ================== 1. PKT TIME HELPERS ==================
-  const PKT_OFFSET_MS = 5 * 60 * 60 * 1000; // UTC+5
+  const PKT_OFFSET_MS = 5 * 60 * 60 * 1000;
 
   function getNowPKT() {
     const now = new Date();
@@ -380,24 +384,23 @@
     return pkt;
   }
 
-  // Live clock (formatted in PKT)
   function updateLiveDateTime() {
     const now = getNowPKT();
     const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
                       hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
     const formatted = now.toLocaleString('en-US', options).replace(/,(\s\d{4})/, '$1');
-    document.getElementById('liveDateTime').innerText = formatted + ' (PKT)';
+    document.getElementById('liveDateTime').innerText = formatted + ' PKT';
   }
 
   // ================== 2. STATE ==================
   let csvData = [];
   let currentView = 'daily';
   let chartInstance = null;
-  let liveDays = 0; // dynamic days-since-latest-record (PKT)
+  let liveDays = 0;
 
   const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtnlGwD2UMLP8U_xNHb0vs7NP75Ikkk-G4xQNbTvjyHpymzsOw5qUbYU3h_9uxEDnOWmrCrfkOffWz/pub?gid=501812835&single=true&output=csv";
 
-  // ================== 3. DATE PARSER (M/D/YYYY) ==================
+  // ================== 3. DATE PARSER ==================
   function parseMyDate(dateString) {
     if (!dateString) return null;
     dateString = dateString.trim();
@@ -418,7 +421,6 @@
     return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  // Days between a record date and today's PKT midnight
   function daysFromRecordToTodayPKT(dateString) {
     const rec = parseMyDate(dateString);
     if (!rec || isNaN(rec)) return 0;
@@ -428,7 +430,7 @@
     return diff < 0 ? 0 : diff;
   }
 
-  // ================== 4. FETCH & PARSE CSV ==================
+  // ================== 4. FETCH CSV ==================
   async function fetchAndParseCSV() {
     try {
       const response = await fetch(csvUrl);
@@ -477,17 +479,13 @@
     if (csvData.length === 0) return;
 
     const latest = csvData[0];
-
-    // Dynamic days since latest record, based on current PKT date
     liveDays = daysFromRecordToTodayPKT(latest.date);
     const liveWeeks = Math.floor(liveDays / 7);
     const liveMonths = Math.floor(liveDays / 30);
 
-    // Latest record badge — date + "X days ago"
     document.getElementById('latestDate').innerText = getWeekdayDate(latest.date);
     document.getElementById('liveTag').innerText = `• ${liveDays} day${liveDays === 1 ? '' : 's'} ago`;
 
-    // Top cards → live values
     document.getElementById('statDays').innerText = liveDays;
     document.getElementById('statWeeks').innerText = liveWeeks;
     document.getElementById('statMonths').innerText = liveMonths;
@@ -520,8 +518,6 @@
     const ctx = document.getElementById('barChart').getContext('2d');
     if (chartInstance) chartInstance.destroy();
 
-    // For chart/table: first row uses LIVE value based on PKT today.
-    // Other rows use the static sheet values.
     const liveWeeks = Math.floor(liveDays / 7);
     const liveMonths = Math.floor(liveDays / 30);
 
@@ -541,7 +537,6 @@
     if (viewType === 'weekly') unit = ' w';
     if (viewType === 'monthly') unit = ' mo';
 
-    // --- TABLE ---
     const tbody = document.getElementById('tableBody');
     tbody.innerHTML = '';
 
@@ -554,13 +549,11 @@
       if (viewType === 'monthly') metricValue = row.months;
 
       if (index === 0) {
-        // live dynamic value on the first row
         if (viewType === 'daily') metricValue = liveDays;
         if (viewType === 'weekly') metricValue = liveWeeks;
         if (viewType === 'monthly') metricValue = liveMonths;
       }
 
-      // Duration column for the first row shows "Live" indicator for clarity
       const durationCell = (index === 0)
         ? `${row.duration} <span style="font-size:8px;color:#d81b60;font-weight:600;">(LIVE)</span>`
         : row.duration;
@@ -574,11 +567,9 @@
       tbody.appendChild(tr);
     });
 
-    // --- CHART HEIGHT ---
     const requiredHeight = (csvData.length * 35) + 50;
     document.getElementById('canvasContainer').style.height = `${requiredHeight}px`;
 
-    // --- CHART ---
     chartInstance = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -644,10 +635,10 @@
   function scheduleMidnightPKTRefresh() {
     const nowPKT = getNowPKT();
     const nextMidnight = new Date(nowPKT);
-    nextMidnight.setHours(24, 0, 1, 0); // next day 00:00:01 PKT
+    nextMidnight.setHours(24, 0, 1, 0);
     const msUntil = nextMidnight - nowPKT;
     setTimeout(() => {
-      fetchAndParseCSV();          // re-compute liveDays at new day
+      fetchAndParseCSV();
       scheduleMidnightPKTRefresh();
     }, msUntil);
   }
@@ -656,7 +647,6 @@
   updateLiveDateTime();
   setInterval(updateLiveDateTime, 1000);
 
-  // Recalculate "days since" every 60s (covers any clock drift)
   setInterval(() => {
     if (csvData.length) updateDashboardUI();
   }, 60000);
