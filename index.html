@@ -5,18 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pirah Periods Dashboard</title>
 
-<!-- PWA Manifest & Meta -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#f8bbd0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 
-<!-- Favicon -->
 <link rel="icon" href="p1.jpg" type="image/jpeg">
 <link rel="apple-touch-icon" href="p1.jpg">
 
-<!-- Google Fonts -->
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -44,7 +40,6 @@
     touch-action: pan-x pan-y pinch-zoom; 
   }
 
-  /* --- ANIMATIONS --- */
   @keyframes slideUpFade {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
@@ -63,7 +58,6 @@
   .card-weeks { animation-delay: 0.4s; }
   .card-months { animation-delay: 0.5s; }
 
-  /* --- TOP HEADER --- */
   .header-card {
     background: linear-gradient(135deg, #f8bbd0 0%, #e1bee7 100%);
     border-radius: 20px;
@@ -114,8 +108,17 @@
     font-weight: 600;
     color: var(--soft-purple);
   }
+  .latest-date-badge .live-tag {
+    display: inline-block;
+    margin-left: 4px;
+    background: #ffe0ec;
+    color: var(--dark-pink);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    font-weight: 600;
+  }
   
-  /* --- CARDS ROW --- */
   .cards-row { 
     display: flex; 
     width: 100%; 
@@ -147,7 +150,6 @@
   .dist-value { font-size: 22px; font-weight: 700; line-height: 1.1; margin-top: 2px; }
   .dist-sub { font-size: 9px; font-weight: 500; opacity: 0.85; margin-top: 2px; }
 
-  /* --- BOTTOM SECTION --- */
   .bottom-section {
     display: flex;
     flex-direction: column;
@@ -167,7 +169,6 @@
     border: 1px solid #fce4ec;
   }
 
-  /* Chart Container */
   .chart-wrapper { flex: 1.2; padding: 12px; position: relative; display: flex; flex-direction: column; }
   
   .chart-header {
@@ -180,7 +181,6 @@
 
   .chart-title { font-size: 11px; font-weight: 600; color: var(--soft-purple); }
   
-  /* Filter Tabs */
   .filter-tabs {
     display: flex;
     gap: 5px;
@@ -206,7 +206,6 @@
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   }
 
-  /* SCROLLABLE CHART AREA */
   .canvas-scroll-wrapper {
     flex: 1;
     overflow-y: auto;
@@ -219,7 +218,6 @@
   .canvas-scroll-wrapper::-webkit-scrollbar { width: 4px; }
   .canvas-scroll-wrapper::-webkit-scrollbar-thumb { background: #f8bbd0; border-radius: 4px; }
 
-  /* Table Container */
   .table-container { flex: 1; }
   
   .scroll-area { 
@@ -232,7 +230,6 @@
   .scroll-area::-webkit-scrollbar { width: 4px; }
   .scroll-area::-webkit-scrollbar-thumb { background: #f8bbd0; border-radius: 4px; }
 
-  /* Table formatting */
   table { 
     width: 100%; 
     border-collapse: collapse; 
@@ -263,14 +260,12 @@
   }
   td { color: #555; }
   
-  /* Current Record Purple Font */
   .highlight-row td { 
     color: var(--soft-purple); 
     font-weight: 700; 
     background: #faf5f8; 
   }
 
-  /* --- DESKTOP LAYOUT --- */
   @media (min-width: 768px) {
     body { padding: 30px; overflow: auto; }
     
@@ -310,7 +305,7 @@
     <div class="date-time-badge" id="liveDateTime">Loading...</div>
     
     <div class="main-title">Pirah Periods Dashboard 🌸</div>
-    <div class="latest-date-badge">Latest Record: <span id="latestDate">...</span></div>
+    <div class="latest-date-badge">Latest Record: <span id="latestDate">...</span><span class="live-tag" id="liveTag"></span></div>
     
     <div class="cards-row">
       <div class="dist-card card-days">
@@ -335,7 +330,6 @@
 
   <div class="bottom-section">
     
-    <!-- CHART -->
     <div class="card chart-wrapper animate-chart">
       <div class="chart-header">
         <div class="chart-title" id="chartTitleDisplay">Cycle Durations</div>
@@ -346,7 +340,6 @@
         </div>
       </div>
       
-      <!-- Scrollable Chart Wrapper -->
       <div class="canvas-scroll-wrapper" id="chartScrollArea">
         <div id="canvasContainer" style="position: relative; width: 100%; height: 100%;">
           <canvas id="barChart"></canvas>
@@ -354,7 +347,6 @@
       </div>
     </div>
 
-    <!-- TABLE -->
     <div class="card table-container animate-table">
       <div class="scroll-area">
         <table>
@@ -374,75 +366,86 @@
   </div>
 
 <script>
-  // --- 1. LIVE DATE & TIME ---
-  function updateLiveDateTime() {
-    const now = new Date();
-    const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-    let formatted = now.toLocaleString('en-US', options).replace(/,(\s\d{4})/, '$1'); 
-    document.getElementById('liveDateTime').innerText = formatted;
-  }
-  setInterval(updateLiveDateTime, 1000);
-  updateLiveDateTime();
+  // ================== 1. PKT TIME HELPERS ==================
+  const PKT_OFFSET_MS = 5 * 60 * 60 * 1000; // UTC+5
 
-  // --- 2. DYNAMIC AUTO-FETCH VARIABLES ---
-  let csvData = []; 
+  function getNowPKT() {
+    const now = new Date();
+    return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + PKT_OFFSET_MS);
+  }
+
+  function getTodayPKTMidnight() {
+    const pkt = getNowPKT();
+    pkt.setHours(0, 0, 0, 0);
+    return pkt;
+  }
+
+  // Live clock (formatted in PKT)
+  function updateLiveDateTime() {
+    const now = getNowPKT();
+    const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+    const formatted = now.toLocaleString('en-US', options).replace(/,(\s\d{4})/, '$1');
+    document.getElementById('liveDateTime').innerText = formatted + ' (PKT)';
+  }
+
+  // ================== 2. STATE ==================
+  let csvData = [];
   let currentView = 'daily';
   let chartInstance = null;
+  let liveDays = 0; // dynamic days-since-latest-record (PKT)
 
-  // ⚠️ PASTE YOUR GOOGLE SHEET CSV URL BELOW ⚠️
   const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtnlGwD2UMLP8U_xNHb0vs7NP75Ikkk-G4xQNbTvjyHpymzsOw5qUbYU3h_9uxEDnOWmrCrfkOffWz/pub?gid=501812835&single=true&output=csv";
 
-  // --- CUSTOM DATE PARSER (STRICTLY FOR M/D/YYYY) ---
+  // ================== 3. DATE PARSER (M/D/YYYY) ==================
   function parseMyDate(dateString) {
     if (!dateString) return null;
     dateString = dateString.trim();
-
     const parts = dateString.split('/');
     if (parts.length === 3) {
       const month = parseInt(parts[0], 10);
       const day = parseInt(parts[1], 10);
       let year = parseInt(parts[2], 10);
-      
-      if (year < 100) year += 2000; 
-      
+      if (year < 100) year += 2000;
       return new Date(year, month - 1, day);
     }
-    return new Date(dateString); 
+    return new Date(dateString);
   }
 
   function getWeekdayDate(dateString) {
     const dateObj = parseMyDate(dateString);
-    if(!dateObj || isNaN(dateObj)) return dateString; 
+    if (!dateObj || isNaN(dateObj)) return dateString;
     return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  // Fetch and Parse CSV Function
+  // Days between a record date and today's PKT midnight
+  function daysFromRecordToTodayPKT(dateString) {
+    const rec = parseMyDate(dateString);
+    if (!rec || isNaN(rec)) return 0;
+    rec.setHours(0, 0, 0, 0);
+    const today = getTodayPKTMidnight();
+    const diff = Math.floor((today - rec) / (1000 * 60 * 60 * 24));
+    return diff < 0 ? 0 : diff;
+  }
+
+  // ================== 4. FETCH & PARSE CSV ==================
   async function fetchAndParseCSV() {
     try {
       const response = await fetch(csvUrl);
       const text = await response.text();
-      
-      // Splitting by new lines, handling potential \r
-      const rows = text.split(/\r?\n/).map(row => {
-        // Simple CSV split. If your descriptions have commas, we'd need a more complex parser, 
-        // but based on the sample, this works perfectly.
-        return row.split(',');
-      });
-      
+      const rows = text.split(/\r?\n/).map(row => row.split(','));
+
       let dataStartIndex = 0;
       for (let i = 0; i < rows.length; i++) {
         if (rows[i].some(cell => cell && cell.includes("Periods Date"))) {
-          dataStartIndex = i + 1; 
+          dataStartIndex = i + 1;
           break;
         }
       }
 
-      let newData = [];
-      
+      const newData = [];
       for (let i = dataStartIndex; i < rows.length; i++) {
         const cols = rows[i];
-        
-        // Skip empty rows (the huge blank space in the sheet)
         if (!cols || cols.length < 8 || !cols[1] || cols[1].trim() === '') continue;
 
         const dateStr = cols[1].trim();
@@ -451,7 +454,7 @@
         const totalMonths = parseInt(cols[7]);
         const totalWeeks = parseInt(cols[8]);
 
-        if (isNaN(totalDays)) continue; 
+        if (isNaN(totalDays)) continue;
 
         newData.push({
           date: dateStr,
@@ -462,38 +465,44 @@
         });
       }
 
-      // Reverse so newest is at the top
       csvData = newData.reverse();
       updateDashboardUI();
-
     } catch (error) {
       console.error("Error fetching CSV:", error);
     }
   }
 
-  // --- 3. UI UPDATE FUNCTIONS ---
+  // ================== 5. DASHBOARD UPDATE ==================
   function updateDashboardUI() {
     if (csvData.length === 0) return;
 
     const latest = csvData[0];
-    
-    // Pull EXACT values from the sheet for top cards
+
+    // Dynamic days since latest record, based on current PKT date
+    liveDays = daysFromRecordToTodayPKT(latest.date);
+    const liveWeeks = Math.floor(liveDays / 7);
+    const liveMonths = Math.floor(liveDays / 30);
+
+    // Latest record badge — date + "X days ago"
     document.getElementById('latestDate').innerText = getWeekdayDate(latest.date);
-    document.getElementById('statDays').innerText = latest.days;
-    document.getElementById('statWeeks').innerText = latest.weeks;
-    document.getElementById('statMonths').innerText = latest.months;
+    document.getElementById('liveTag').innerText = `• ${liveDays} day${liveDays === 1 ? '' : 's'} ago`;
+
+    // Top cards → live values
+    document.getElementById('statDays').innerText = liveDays;
+    document.getElementById('statWeeks').innerText = liveWeeks;
+    document.getElementById('statMonths').innerText = liveMonths;
 
     changeView(currentView);
   }
 
-  // --- 4. FILTER LOGIC ---
+  // ================== 6. VIEW SWITCH ==================
   function changeView(view) {
     currentView = view;
 
     document.querySelectorAll('.filter-tabs button').forEach(b => b.classList.remove('active'));
     document.getElementById(`btn-${view}`).classList.add('active');
 
-    const titles = { 'daily': 'Cycle Durations', 'weekly': 'Weekly Breakdown', 'monthly': 'Monthly Breakdown' };
+    const titles = { daily: 'Cycle Durations', weekly: 'Weekly Breakdown', monthly: 'Monthly Breakdown' };
     document.getElementById('chartTitleDisplay').innerText = titles[view];
 
     const thMetric = document.getElementById('th-metric');
@@ -504,75 +513,89 @@
     renderBarChartAndTable(view);
   }
 
-  // --- 5. RENDER CHART & TABLE ---
+  // ================== 7. RENDER CHART + TABLE ==================
   function renderBarChartAndTable(viewType) {
     if (csvData.length === 0) return;
 
     const ctx = document.getElementById('barChart').getContext('2d');
-    
-    if (chartInstance) {
-      chartInstance.destroy();
-    }
+    if (chartInstance) chartInstance.destroy();
 
-    let labels = csvData.map(d => getWeekdayDate(d.date)); 
-    let dataPoints = [];
+    // For chart/table: first row uses LIVE value based on PKT today.
+    // Other rows use the static sheet values.
+    const liveWeeks = Math.floor(liveDays / 7);
+    const liveMonths = Math.floor(liveDays / 30);
+
+    const labels = csvData.map(d => getWeekdayDate(d.date));
+    const dataPoints = csvData.map((d, i) => {
+      if (i === 0) {
+        if (viewType === 'daily') return liveDays;
+        if (viewType === 'weekly') return liveWeeks;
+        if (viewType === 'monthly') return liveMonths;
+      }
+      if (viewType === 'daily') return d.days;
+      if (viewType === 'weekly') return d.weeks;
+      return d.months;
+    });
+
     let unit = ' d';
+    if (viewType === 'weekly') unit = ' w';
+    if (viewType === 'monthly') unit = ' mo';
 
-    if (viewType === 'daily') {
-      dataPoints = csvData.map(d => d.days);
-      unit = ' d';
-    } else if (viewType === 'weekly') {
-      dataPoints = csvData.map(d => d.weeks);
-      unit = ' w';
-    } else if (viewType === 'monthly') {
-      dataPoints = csvData.map(d => d.months);
-      unit = ' mo';
-    }
-
-    // --- UPDATE TABLE ---
+    // --- TABLE ---
     const tbody = document.getElementById('tableBody');
     tbody.innerHTML = '';
-    
+
     csvData.forEach((row, index) => {
       const tr = document.createElement('tr');
-      if (index === 0) tr.classList.add('highlight-row'); 
-      
+      if (index === 0) tr.classList.add('highlight-row');
+
       let metricValue = row.days;
       if (viewType === 'weekly') metricValue = row.weeks;
       if (viewType === 'monthly') metricValue = row.months;
+
+      if (index === 0) {
+        // live dynamic value on the first row
+        if (viewType === 'daily') metricValue = liveDays;
+        if (viewType === 'weekly') metricValue = liveWeeks;
+        if (viewType === 'monthly') metricValue = liveMonths;
+      }
+
+      // Duration column for the first row shows "Live" indicator for clarity
+      const durationCell = (index === 0)
+        ? `${row.duration} <span style="font-size:8px;color:#d81b60;font-weight:600;">(LIVE)</span>`
+        : row.duration;
 
       tr.innerHTML = `
         <td>${index + 1}</td>
         <td>${getWeekdayDate(row.date)}</td>
         <td>${metricValue}</td>
-        <td>${row.duration}</td>
+        <td>${durationCell}</td>
       `;
       tbody.appendChild(tr);
     });
 
-    // --- DYNAMIC CHART HEIGHT ---
-    const requiredHeight = (csvData.length * 35) + 50; 
-    const canvasContainer = document.getElementById('canvasContainer');
-    canvasContainer.style.height = `${requiredHeight}px`;
+    // --- CHART HEIGHT ---
+    const requiredHeight = (csvData.length * 35) + 50;
+    document.getElementById('canvasContainer').style.height = `${requiredHeight}px`;
 
-    // --- UPDATE CHART ---
+    // --- CHART ---
     chartInstance = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: labels, 
+        labels: labels,
         datasets: [{
           data: dataPoints,
-          backgroundColor: labels.map((_, i) => i === 0 ? '#d81b60' : '#f8bbd0'), 
-          borderRadius: 8, 
+          backgroundColor: labels.map((_, i) => i === 0 ? '#d81b60' : '#f8bbd0'),
+          borderRadius: 8,
           borderSkipped: false,
-          barThickness: 20, 
+          barThickness: 20,
           hoverBackgroundColor: '#ad1457'
         }]
       },
       options: {
         indexAxis: 'y',
         responsive: true,
-        maintainAspectRatio: false, 
+        maintainAspectRatio: false,
         layout: { padding: { right: 30 } },
         plugins: {
           legend: { display: false },
@@ -583,21 +606,14 @@
             borderColor: '#f8bbd0',
             borderWidth: 1,
             padding: 10,
-            displayColors: false,
+            displayColors: false
           }
         },
         scales: {
-          x: { 
-            beginAtZero: true, 
-            display: false,
-            grid: { display: true, color: '#faf5f8', drawTicks: false } 
-          },
-          y: { 
+          x: { beginAtZero: true, display: false, grid: { display: true, color: '#faf5f8', drawTicks: false } },
+          y: {
             grid: { display: false },
-            ticks: { 
-              font: { size: 11, family: 'Poppins', weight: '600' }, 
-              color: '#555' 
-            }
+            ticks: { font: { size: 11, family: 'Poppins', weight: '600' }, color: '#555' }
           }
         },
         animation: {
@@ -605,17 +621,17 @@
           easing: 'easeOutQuart',
           onComplete: function() {
             const chartInstance = this;
-            const ctx = chartInstance.ctx;
-            ctx.font = 'bold 11px Poppins';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
+            const ctx2 = chartInstance.ctx;
+            ctx2.font = 'bold 11px Poppins';
+            ctx2.textAlign = 'left';
+            ctx2.textBaseline = 'middle';
 
             this.data.datasets.forEach(function(dataset, i) {
               const meta = chartInstance.getDatasetMeta(i);
               meta.data.forEach(function(bar, index) {
                 const data = dataset.data[index];
-                ctx.fillStyle = index === 0 ? '#d81b60' : '#666';
-                ctx.fillText(data + unit, bar.x + 8, bar.y);
+                ctx2.fillStyle = index === 0 ? '#d81b60' : '#666';
+                ctx2.fillText(data + unit, bar.x + 8, bar.y);
               });
             });
           }
@@ -624,10 +640,30 @@
     });
   }
 
-  // --- 6. INITIALIZE & AUTO-REFRESH ---
-  fetchAndParseCSV();
-  setInterval(fetchAndParseCSV, 30000); 
+  // ================== 8. PKT MIDNIGHT ROLLOVER ==================
+  function scheduleMidnightPKTRefresh() {
+    const nowPKT = getNowPKT();
+    const nextMidnight = new Date(nowPKT);
+    nextMidnight.setHours(24, 0, 1, 0); // next day 00:00:01 PKT
+    const msUntil = nextMidnight - nowPKT;
+    setTimeout(() => {
+      fetchAndParseCSV();          // re-compute liveDays at new day
+      scheduleMidnightPKTRefresh();
+    }, msUntil);
+  }
 
+  // ================== 9. INIT ==================
+  updateLiveDateTime();
+  setInterval(updateLiveDateTime, 1000);
+
+  // Recalculate "days since" every 60s (covers any clock drift)
+  setInterval(() => {
+    if (csvData.length) updateDashboardUI();
+  }, 60000);
+
+  fetchAndParseCSV();
+  setInterval(fetchAndParseCSV, 30000);
+  scheduleMidnightPKTRefresh();
 </script>
 </body>
 </html>
